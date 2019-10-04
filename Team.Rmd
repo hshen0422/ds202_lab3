@@ -1,0 +1,139 @@
+---
+title: "ds202_lab3"
+author: "Hanying Shen, and Sijie Huang"
+date: "10/3/2019"
+output: html_document
+---
+
+## Background
+
+The General Social Survey (GSS) has been run by NORC every other year since 1972 to keep track of current opinions across the United States. We are working with an excerpt of the dataset that covers years 1972 to 2016. The variable names along with a brief description are as follows: 
+
+| Variable      | Description   |    
+| ------------- |:-------------:| 
+| Year          | Year for this respondent | 
+| Age           | Age of respondent | 
+| Sex           | Sex of respondent     | 
+|....           | .....      | 
+
+Now it's important to understand what each column stands for. You can find a codebook with explanations for each of the variables at https://gssdataexplorer.norc.org/
+
+## Data Cleaning 
+
+Initial exploration revealed that some data processing was needed before we could proceed with further visualization. All missing values were encoded with 'NA' as follows:
+```{r}
+library(tidyverse)
+happy <- readRDS("HAPPY.rds")
+names(happy) = tolower(names(happy))
+happy[happy == "IAP"] <- NA
+happy[happy == "DK"] <- NA
+happy[happy == "NA"] <- NA
+names(happy)[sapply(happy, anyNA)]
+sum(is.na(happy))
+happy<-na.omit(happy)
+```
+Because missing values will affect the accurace of the analysis and we don't want to have different code for missing value, we removed all the missing data to avoid errors in making plots and calculations.
+In total there were `36391` number of missing values for the following `happy`, `age`, `marital`, `degree`, `finrela`, `health`, `partyid`  `polviews` variables. 
+
+
+Variables were also cast into the correct type in order to ease data visualization. This was done by:
+```{r}
+happy$age<-replace(happy$age,happy$ag=="89 OR OLDER",89)
+table(happy$age)
+happy$age<-as.numeric(happy$age)
+sapply(happy, class)
+happy$happy<-as.factor(happy$happy)
+happy$sex<-as.factor(happy$sex)
+happy$marital<-as.factor(happy$marital)
+happy$degree<-as.factor(happy$degree)
+happy$finrela<-as.factor(happy$finrela)
+happy$health <- as.factor(happy$health)
+happy$partyid <- as.factor(happy$partyid)
+happy$polviews <- as.factor(happy$polviews)
+sapply(happy, class)
+```
+We changed categorical variables to factor varibles because we need to reorder the levels, which requires to be factor variables. We have a value of "89 and more" under column age, and we modify it into "89", but after this, it's still character class. So we need to change the character class to numerical class, so that all values in column age will be numerical and we can reorder it by the mean of the age. 
+
+
+
+
+We reordered levels of factors for marital, degree, partyid, wtssall, year by descending the average age of marital status. We also reordered levels of factors for health, finrela, happy, polviews, sex by descending the standard deviation of the corresponding health status by ages. All levels of factors are all formed in one table with sensible orders.
+Factors were also organized into meaningful order as follows: 
+```{r}
+library(dplyr)
+happy$marital<-fct_explicit_na(happy$marital, na_level = "NA")
+happy=happy%>% group_by(marital) %>% mutate(prop=mean(age,na.rm=TRUE))
+happy<-happy%>%arrange(marital,degree,desc(prop),age,partyid,wtssall,year)
+happy=happy%>%group_by(health) %>%mutate(sd1=sd(age,na.rm=TRUE))
+happy<-happy%>%arrange(health,finrela,desc(sd1),desc(happy),polviews,sex)            
+head(happy)
+```
+
+
+## Data Exploration 
+
+As for data exploration, we made two graphs of the distribution of age and the distribution of years. According to the distribution of ages plot, we can see that data is separated by gender in two boxes. We colored the health levels in different colors and counted the number of people in each health condition by ages. For instance, we can learn that more females are considered their health condition as good at age 30 compared to males at 30 in this research. Fewer males consider their health condition as poor from age 20 to 40 compared to females. Based on the distribution of years, we can see that data is separated by happiness in three boxes. We colored the marital status in different colors and counted the number of people in each happiness level by year for this respondent. For example, we can learn that more "married" people consider them as "pretty happy" and "very happy" compared to "married" people who are "not too happy" in 2000. More "never married" people consider them as "pretty happy" compared to "never married" people as "not too happy" and "very happy" in 2000.
+
+Two variables of interest are `age` and `year`. Their distributions are as follow: 
+```{r}
+library(ggplot2)
+#distribution of age
+ggplot(happy) +
+  geom_histogram( aes(age, fill =health),binwidth =0.8,alpha = 1, bins =3000,position = "stack")+facet_grid(~sex, scales="free", space="free")+
+labs(title="Histogram of age", x="age", y="Count")+theme_linedraw()
+#distribution for year
+p<-ggplot(happy)
+h<-p+geom_histogram(mapping =aes(year,fill=marital),col="red",binwidth =1 ,alpha = .9, bins =30,position = "stack")
+c<-h+theme_linedraw()+labs(title="Histogram of year", x="year", y="Count")+facet_grid(~happy, scales="free", space="free")+coord_flip()
+c
+```
+
+
+
+We investigate the relationshio between happiness and log of age, health status, and weight and conclude that log of age and the weight variable "wtssall" has weakly negative correlation. The mojority of people in this research are older over than log(40.17107). Elder people with low weight variable(wtssall<1.25) are "not too happy", and  Most of people's health status are above poor. The range of the weight variable is from 0.0 to 5.0. There is an extreme outlier, which has high value of weight variable, considered as "excenllent" health status and "very happy". 
+```{r}
+#relationship between age wtssal and happy
+ggplot(happy,aes(x=age,y=wtssall))+geom_point(mapping=aes(color=happy,shape=health,size=0.2),alpha = .6)+ geom_smooth(method = "lm")+
+  xlab("log of Age") + ylab("weight variable ") + ggtitle("relationship between happiness and age,health status,weight")
+```
+
+
+
+We learned the relationship between happiness and age, year, health status, maritalstatus, weight variable, sex, and the opinion of family income from the above plots. We also wonder the relationship of the opinion of family income, sex, and happiness. 
+
+From the plot below, we can learn that if the opinion of family income "finrela" is "above average" and "far above average" has the least "not too happy" and the most "very happy". People who are "far below average" in their opinon of family income has the most "not too happy". People who are "below average" have the most "pretty happy". Overall, males are happier compared to females. 
+```{r}
+#relationship between happy and finrela
+ggplot(happy,aes(x=finrela,fill=happy)) + geom_bar(position="fill",,alpha = .9)+
+theme_minimal()+coord_flip()+facet_grid(~sex)+xlab("opinion to family income") + ylab("sex") + ggtitle("happiness by opinion to family income and sex ")
+```
+
+
+
+
+
+From plots below, we can learn that "very happy" people are "married" "males", "excenllent health", with a "graduate degree", think of themselves as very conservative", and their political party affiliation is "strong Republican".
+```{r}
+#relationship between sex and marital, health and happiness 
+library(ggmosaic)
+ggplot(data = happy) +
+  geom_mosaic(aes(x= product(sex), fill=happy)) +
+  facet_grid(marital~health)+coord_flip()+xlab("health condition") + ylab("sex and marital status") + ggtitle("happiness by sex,health condition and marital status  ")
+ggplot(data = happy) +
+  geom_mosaic(aes(x= product(degree), fill=happy))+xlab("degree") + ylab("happiness level") + ggtitle("happiness by degree ")
+ggplot(data = happy) +
+  geom_mosaic(aes(x= product(polviews), fill=happy))+xlab("Think of self as liberal or conservative") + ylab("happiness level") + ggtitle("happiness by Think of self as liberal or conservative ")
+ggplot(data = happy) +
+  geom_mosaic(aes(x= product(partyid), fill=happy))+xlab("political party affliation") + ylab("happiness level") + ggtitle("happiness by political party affliation ")
+```
+
+
+
+
+
+
+
+
+
+
+
